@@ -119,14 +119,16 @@ class DocCommentProcessor {
   }
 
   String _stripDocPrefix(List<String> lines) {
-    return lines
-        .map((line) {
-          final stripped = line.trimLeft();
-          if (stripped.startsWith('/// ')) return stripped.substring(4);
-          if (stripped.startsWith('///')) return stripped.substring(3);
-          return line;
-        })
-        .join('\n');
+    final sb = StringBuffer();
+    for (final line in lines) {
+      final stripped = line.trimLeft();
+      sb.writeln(switch (stripped) {
+        String s when s.startsWith('/// ') => s.substring(4),
+        String s when s.startsWith('///') => s.substring(3),
+        _ => line,
+      });
+    }
+    return sb.toString();
   }
 
   String _addDocPrefix(String code, String prefix) {

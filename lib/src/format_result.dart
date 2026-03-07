@@ -40,16 +40,20 @@ class FileResult {
   const FileResult({
     required this.path,
     required this.snippets,
-    required this.output,
+    this.output = '',
   });
 
   final String path;
   final List<SnippetResult> snippets;
 
   /// The full file content after formatting all snippets.
+  /// Empty after [withoutOutput] to avoid unnecessary data transfer.
   final String output;
 
   bool get changed => snippets.any((s) => s is SnippetFormatted && s.changed);
 
   bool get hasErrors => snippets.any((s) => s is SnippetError);
+
+  /// Returns a copy without [output] to reduce serialization cost.
+  FileResult withoutOutput() => FileResult(path: path, snippets: snippets);
 }

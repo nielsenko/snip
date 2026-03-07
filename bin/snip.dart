@@ -139,10 +139,11 @@ class FormatCommand extends Command<int> {
                 'Cannot format snippets in $path. Invalid extension!',
               ),
             };
-            if (apply) {
+            if (apply && result.changed) {
               File(result.path).writeAsStringSync(result.output);
             }
-            return result;
+            // Drop output to avoid transferring file contents back.
+            return result.withoutOutput();
           }),
         ),
       );
