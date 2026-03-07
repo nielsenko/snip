@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
 import 'dart_scanner.dart';
 import 'format_result.dart';
 import 'snippet_formatter.dart';

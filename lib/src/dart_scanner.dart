@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
 /// A minimal recursive-descent scanner for Dart source code.
 ///
 /// Scans the entire source in a single pass, correctly handling nested block

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
 /// Result of formatting a single code snippet.
 sealed class SnippetResult {
   const SnippetResult({required this.original, required this.startLine});

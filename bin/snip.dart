@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
 import 'dart:io';
 
 import 'package:args/command_runner.dart';
