@@ -2,6 +2,9 @@ name: snip
 description: A CLI tool that formats Dart code snippets embedded in Markdown files and doc comments.
 version: 0.1.0
 
+executables:
+  snip:
+
 environment:
   sdk: ^3.11.1
 
