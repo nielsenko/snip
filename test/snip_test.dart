@@ -134,5 +134,52 @@ void foo() {}
       expect(result.changed, isFalse);
       expect(result.output, equals(input));
     });
+
+    test('ignores /// inside triple-quoted strings', () {
+      final input =
+          "final x = '''\n"
+          '/// ```dart\n'
+          '/// var  y=1;\n'
+          "/// ```\n''';\n";
+      final result = processor.process(input, path: 'test.dart');
+      expect(result.changed, isFalse);
+      expect(result.snippets, isEmpty);
+    });
+
+    test('ignores /// inside block comments', () {
+      final input =
+          '/* \n'
+          '/// ```dart\n'
+          '/// var  y=1;\n'
+          '/// ```\n'
+          '*/\n';
+      final result = processor.process(input, path: 'test.dart');
+      expect(result.changed, isFalse);
+      expect(result.snippets, isEmpty);
+    });
+
+    test('ignores /// inside nested block comments', () {
+      final input =
+          '/* outer\n'
+          '/* inner\n'
+          '/// ```dart\n'
+          '/// var  y=1;\n'
+          '/// ```\n'
+          '*/\n'
+          '*/\n';
+      final result = processor.process(input, path: 'test.dart');
+      expect(result.changed, isFalse);
+      expect(result.snippets, isEmpty);
+    });
+
+    test('ignores /// inside single-line strings', () {
+      final input =
+          'var x = "/// ```dart";\n'
+          'var y = "/// var  z=1;";\n'
+          'var w = "/// ```";\n';
+      final result = processor.process(input, path: 'test.dart');
+      expect(result.changed, isFalse);
+      expect(result.snippets, isEmpty);
+    });
   });
 }

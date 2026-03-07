@@ -4,6 +4,7 @@ import 'package:args/command_runner.dart';
 import 'package:glob/glob.dart';
 import 'package:glob/list_local_fs.dart';
 import 'package:path/path.dart' as p;
+import 'package:pub_semver/pub_semver.dart';
 import 'package:snip/snip.dart';
 
 void main(List<String> args) async {
@@ -27,9 +28,16 @@ class FormatCommand extends Command<int> {
       ..addFlag(
         'check',
         help:
-            'Check formatting without writing changes. Exits with code 1 if files need formatting.',
+            'Check if files need formatting (exit code 1 if so). Does not write.',
       )
-      ..addFlag('apply', help: 'Write formatted content back to files.');
+      ..addFlag('apply', help: 'Write formatted content back to files.')
+      ..addOption(
+        'language-version',
+        help:
+            'Dart language version for formatting (e.g. "3.10").\n'
+            'Defaults to the latest version supported by dart_style.',
+        valueHelp: 'major.minor',
+      );
   }
 
   @override
@@ -37,7 +45,8 @@ class FormatCommand extends Command<int> {
 
   @override
   String get description =>
-      'Format Dart code snippets in Markdown files and doc comments.';
+      'Format Dart code snippets in Markdown files and doc comments.\n'
+      'By default, performs a dry run (reports files that would change).';
 
   @override
   String get invocation => '${runner!.executableName} $name <path>';
@@ -56,7 +65,17 @@ class FormatCommand extends Command<int> {
       usageException('Cannot use --check and --apply together.');
     }
 
-    final formatter = SnippetFormatter();
+    final versionStr = argResults!.option('language-version');
+    Version? languageVersion;
+    if (versionStr != null) {
+      try {
+        languageVersion = Version.parse('$versionStr.0');
+      } on FormatException {
+        usageException('Invalid language version: "$versionStr".');
+      }
+    }
+
+    final formatter = SnippetFormatter(languageVersion: languageVersion);
     final mdProcessor = MarkdownProcessor(formatter);
     final docProcessor = DocCommentProcessor(formatter);
 
@@ -129,7 +148,11 @@ class FormatCommand extends Command<int> {
           glob
               .listSync(root: target)
               .whereType<File>()
-              .where((f) => !p.split(f.path).any((s) => s.startsWith('.'))),
+              .where(
+                (f) => !p
+                    .split(f.path)
+                    .any((s) => s.startsWith('.') && s != '.' && s != '..'),
+              ),
         );
       }
       return files;

@@ -1,81 +1,123 @@
+import 'dart_scanner.dart';
 import 'format_result.dart';
 import 'snippet_formatter.dart';
 
-/// Regex matching ```dart code blocks inside `///` doc comments.
-///
-/// Captures the full block including the `///` prefixed fence lines.
-final _docDartBlockRegex = RegExp(
-  r'^([ \t]*///[ \t]*)```dart\s*\n((?:[ \t]*///.*\n)*?)[ \t]*///[ \t]*```\s*$',
-  multiLine: true,
-);
-
 /// Processes Dart files, formatting code blocks in `///` doc comments.
+///
+/// Uses [DartScanner] to identify real doc comment lines (ignoring `///` that
+/// appears inside strings or block comments), then finds and formats
+/// `` ```dart `` blocks within those comments.
 class DocCommentProcessor {
   DocCommentProcessor(this._formatter);
 
   final SnippetFormatter _formatter;
 
-  /// Processes [content] from a file at [path], returning a [FileResult].
   FileResult process(String content, {required String path}) {
+    final lines = content.split('\n');
+    final lineInfos = DartScanner(content).scan();
     final snippets = <SnippetResult>[];
-    final buffer = StringBuffer();
-    var lastEnd = 0;
+    final output = <String>[];
 
-    for (final match in _docDartBlockRegex.allMatches(content)) {
-      buffer.write(content.substring(lastEnd, match.start));
+    int? blockStartLine;
+    String? blockPrefix;
+    final blockLines = <String>[];
 
-      final prefix = match.group(1)!;
-      final rawBlock = match.group(2)!;
-      final startLine = _lineNumber(content, match.start);
+    for (var i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      final isDoc = lineInfos[i] == LineKind.docComment;
 
-      // Strip the `/// ` prefix from each code line.
-      final code = _stripDocPrefix(rawBlock);
-
-      try {
-        final formatted = _formatter.format(code);
-        final recommented = _addDocPrefix(formatted, prefix);
-
-        snippets.add(
-          SnippetFormatted(
-            original: code,
-            startLine: startLine,
-            formatted: formatted,
-          ),
-        );
-
-        buffer.write('$prefix```dart\n$recommented$prefix```');
-      } on FormatException catch (e) {
-        snippets.add(
-          SnippetError(
-            original: code,
-            startLine: startLine,
-            message: e.message,
-          ),
-        );
-        // Preserve original block unchanged.
-        buffer.write('$prefix```dart\n$rawBlock$prefix```');
+      // If we're collecting a code block but hit a non-doc line, flush.
+      if (blockStartLine != null && !isDoc) {
+        _flushPartial(blockLines, blockPrefix!, output);
+        blockStartLine = null;
+        blockPrefix = null;
+        output.add(line);
+        continue;
       }
 
-      lastEnd = match.end;
+      if (!isDoc) {
+        output.add(line);
+        continue;
+      }
+
+      final trimmed = line.trimLeft();
+      final afterSlashes = trimmed.substring(3).trimLeft();
+
+      // Are we collecting a code block?
+      if (blockStartLine != null) {
+        if (afterSlashes == '```') {
+          // Closing fence - format the collected block.
+          final code = _stripDocPrefix(blockLines);
+          final prefix = blockPrefix!;
+
+          try {
+            final formatted = _formatter.format(code);
+            final recommented = _addDocPrefix(formatted, prefix);
+            snippets.add(
+              SnippetFormatted(
+                original: code,
+                startLine: blockStartLine,
+                formatted: formatted,
+              ),
+            );
+            output.add('$prefix```dart');
+            output.addAll(recommented.split('\n'));
+          } on FormatException catch (e) {
+            snippets.add(
+              SnippetError(
+                original: code,
+                startLine: blockStartLine,
+                message: e.message,
+              ),
+            );
+            output.addAll(blockLines);
+          }
+          output.add(line); // closing fence
+          blockLines.clear();
+          blockStartLine = null;
+          blockPrefix = null;
+          continue;
+        }
+
+        blockLines.add(line);
+        continue;
+      }
+
+      // Look for opening ```dart fence.
+      if (afterSlashes == '```dart' || afterSlashes.startsWith('```dart ')) {
+        blockStartLine = i + 1; // 1-based
+        blockPrefix = _extractPrefix(line);
+        continue;
+      }
+
+      output.add(line);
     }
 
-    buffer.write(content.substring(lastEnd));
+    // File ended mid-block - flush unchanged.
+    if (blockStartLine != null) {
+      _flushPartial(blockLines, blockPrefix!, output);
+    }
 
     return FileResult(
       path: path,
       snippets: snippets,
-      output: buffer.toString(),
+      output: output.join('\n'),
     );
   }
 
-  int _lineNumber(String content, int offset) {
-    return content.substring(0, offset).split('\n').length;
+  void _flushPartial(List<String> lines, String prefix, List<String> output) {
+    output.add('$prefix```dart');
+    output.addAll(lines);
+    lines.clear();
   }
 
-  /// Strips the `///` prefix (and optional trailing space) from each line.
-  String _stripDocPrefix(String block) {
-    return block
-        .split('\n')
+  String _extractPrefix(String line) {
+    final match = RegExp(r'^([ \t]*///[ \t]*)').firstMatch(line);
+    return match?.group(1) ?? '/// ';
+  }
+
+  String _stripDocPrefix(List<String> lines) {
+    return lines
         .map((line) {
           final stripped = line.trimLeft();
           if (stripped.startsWith('/// ')) return stripped.substring(4);
@@ -85,14 +127,13 @@ class DocCommentProcessor {
         .join('\n');
   }
 
-  /// Adds a doc comment prefix to each line of formatted code.
   String _addDocPrefix(String code, String prefix) {
-    return code
-        .split('\n')
-        .map((line) {
-          if (line.isEmpty) return line;
-          return '$prefix$line';
-        })
+    final lines = code.split('\n');
+    final trimmed = lines.isNotEmpty && lines.last.isEmpty
+        ? lines.sublist(0, lines.length - 1)
+        : lines;
+    return trimmed
+        .map((line) => line.isEmpty ? line : '$prefix$line')
         .join('\n');
   }
 }

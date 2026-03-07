@@ -1,13 +1,14 @@
 import 'package:dart_style/dart_style.dart';
+import 'package:pub_semver/pub_semver.dart';
 
 /// Formats Dart code snippets using a multi-attempt harness strategy.
 ///
 /// Since snippets are often fragments (not full compilation units), this
 /// tries multiple approaches before giving up.
 class SnippetFormatter {
-  SnippetFormatter({int pageWidth = 80})
+  SnippetFormatter({int pageWidth = 80, Version? languageVersion})
     : _formatter = DartFormatter(
-        languageVersion: DartFormatter.latestLanguageVersion,
+        languageVersion: languageVersion ?? DartFormatter.latestLanguageVersion,
         pageWidth: pageWidth,
       );
 
