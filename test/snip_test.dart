@@ -123,6 +123,21 @@ void foo() {}
       expect(result.output, contains('void foo() {}'));
     });
 
+    test('preserves /// on blank lines in formatted code', () {
+      final input = '''
+/// ```dart
+/// import 'foo.dart';
+///
+/// void main( ){print("hello");}
+/// ```
+void foo() {}
+''';
+      final result = processor.process(input, path: 'test.dart');
+      expect(result.changed, isTrue);
+      expect(result.output, contains("/// import 'foo.dart';"));
+      expect(result.output, contains('///\n/// void main()'));
+    });
+
     test('preserves non-dart doc blocks', () {
       final input = '''
 /// Example:

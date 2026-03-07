@@ -135,7 +135,7 @@ class DocCommentProcessor {
         ? lines.sublist(0, lines.length - 1)
         : lines;
     return trimmed
-        .map((line) => line.isEmpty ? line : '$prefix$line')
+        .map((line) => line.isEmpty ? prefix.trimRight() : '$prefix$line')
         .join('\n');
   }
 }
