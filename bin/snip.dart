@@ -61,7 +61,8 @@ class FormatCommand extends Command<int> {
     final docProcessor = DocCommentProcessor(formatter);
 
     final files = _collectFiles(rest.first);
-    var needsFormatting = false;
+    var formattedCount = 0;
+    var unchangedCount = 0;
     var errorCount = 0;
 
     for (final file in files) {
@@ -86,23 +87,30 @@ class FormatCommand extends Command<int> {
       }
 
       if (result.changed) {
-        needsFormatting = true;
+        formattedCount++;
         if (apply) {
           file.writeAsStringSync(result.output);
-          stdout.writeln('Formatted ${file.path}');
+          stdout.writeln('  formatted: ${file.path}');
         } else if (check) {
-          stdout.writeln('Needs formatting: ${file.path}');
+          stdout.writeln('  needs formatting: ${file.path}');
         } else {
-          stdout.writeln('Would format: ${file.path}');
+          stdout.writeln('  would format: ${file.path}');
         }
+      } else {
+        unchangedCount++;
       }
     }
 
-    if (errorCount > 0) {
-      stderr.writeln('$errorCount snippet(s) had errors.');
-    }
+    // Summary line.
+    final total = formattedCount + unchangedCount;
+    final parts = <String>[
+      '$total file(s) scanned',
+      '$formattedCount need formatting',
+      if (errorCount > 0) '$errorCount error(s)',
+    ];
+    stdout.writeln(parts.join(', '));
 
-    if (check && needsFormatting) return 1;
+    if (check && formattedCount > 0) return 1;
     return 0;
   }
 
