@@ -6,11 +6,16 @@ import 'package:pub_semver/pub_semver.dart';
 /// Since snippets are often fragments (not full compilation units), this
 /// tries multiple approaches before giving up.
 class SnippetFormatter {
-  SnippetFormatter({int pageWidth = 80, Version? languageVersion})
-    : _formatter = DartFormatter(
-        languageVersion: languageVersion ?? DartFormatter.latestLanguageVersion,
-        pageWidth: pageWidth,
-      );
+  SnippetFormatter({
+    int pageWidth = 80,
+    Version? languageVersion,
+    TrailingCommas? trailingCommas,
+  }) : _formatter = DartFormatter(
+         languageVersion:
+             languageVersion ?? DartFormatter.latestLanguageVersion,
+         pageWidth: pageWidth,
+         trailingCommas: trailingCommas,
+       );
 
   final DartFormatter _formatter;
 

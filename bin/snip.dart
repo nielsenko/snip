@@ -4,6 +4,7 @@ import 'package:args/command_runner.dart';
 import 'package:glob/glob.dart';
 import 'package:glob/list_local_fs.dart';
 import 'package:path/path.dart' as p;
+import 'package:dart_style/dart_style.dart' show TrailingCommas;
 import 'package:pub_semver/pub_semver.dart';
 import 'package:snip/snip.dart';
 
@@ -37,6 +38,19 @@ class FormatCommand extends Command<int> {
             'Dart language version for formatting (e.g. "3.10").\n'
             'Defaults to the latest version supported by dart_style.',
         valueHelp: 'major.minor',
+      )
+      ..addOption(
+        'line-length',
+        abbr: 'l',
+        help: 'Target line length (default: 80).',
+        valueHelp: 'columns',
+        defaultsTo: '80',
+      )
+      ..addFlag(
+        'preserve-trailing-commas',
+        help:
+            'Preserve existing trailing commas (force splits).\n'
+            'By default, the formatter manages trailing commas automatically.',
       );
   }
 
@@ -75,7 +89,20 @@ class FormatCommand extends Command<int> {
       }
     }
 
-    final formatter = SnippetFormatter(languageVersion: languageVersion);
+    final lineLength = int.tryParse(argResults!.option('line-length')!);
+    if (lineLength == null || lineLength <= 0) {
+      usageException('Invalid line length.');
+    }
+
+    final trailingCommas = argResults!.flag('preserve-trailing-commas')
+        ? TrailingCommas.preserve
+        : null;
+
+    final formatter = SnippetFormatter(
+      languageVersion: languageVersion,
+      pageWidth: lineLength,
+      trailingCommas: trailingCommas,
+    );
     final mdProcessor = MarkdownProcessor(formatter);
     final docProcessor = DocCommentProcessor(formatter);
 
