@@ -99,6 +99,19 @@ var  y=2;
       expect(result.snippets, hasLength(2));
       expect(result.changed, isTrue);
     });
+
+    test('preserves blank line after closing fence', () {
+      final input = '''\
+```dart
+var  x=1;
+```
+
+### Next section
+''';
+      final result = processor.process(input, path: 'test.md');
+      expect(result.changed, isTrue);
+      expect(result.output, contains('```\n\n### Next section'));
+    });
   });
 
   group('DocCommentProcessor', () {

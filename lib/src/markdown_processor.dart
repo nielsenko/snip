@@ -9,7 +9,7 @@ import 'snippet_formatter.dart';
 ///   Group 1: leading whitespace before the opening fence
 ///   Group 2: the code content between the fences
 final _dartBlockRegex = RegExp(
-  r'^([ \t]*)```dart\s*\n([\s\S]*?)^\1```\s*$',
+  r'^([ \t]*)```dart[ \t]*\n([\s\S]*?)^\1```[ \t]*$',
   multiLine: true,
 );
 
