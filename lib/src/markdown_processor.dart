@@ -15,7 +15,7 @@ final _dartBlockRegex = RegExp(
 
 /// Processes Markdown content, formatting embedded Dart code blocks.
 class MarkdownProcessor {
-  MarkdownProcessor(this._formatter);
+  const MarkdownProcessor(this._formatter);
 
   final SnippetFormatter _formatter;
 

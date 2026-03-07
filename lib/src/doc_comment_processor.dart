@@ -10,7 +10,7 @@ import 'snippet_formatter.dart';
 /// appears inside strings or block comments), then finds and formats
 /// `` ```dart `` blocks within those comments.
 class DocCommentProcessor {
-  DocCommentProcessor(this._formatter);
+  const DocCommentProcessor(this._formatter);
 
   final SnippetFormatter _formatter;
 

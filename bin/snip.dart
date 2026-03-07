@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:args/command_runner.dart';
-import 'package:glob/glob.dart';
-import 'package:glob/list_local_fs.dart';
-import 'package:path/path.dart' as p;
 import 'package:dart_style/dart_style.dart' show TrailingCommas;
+import 'package:path/path.dart' as p;
 import 'package:pub_semver/pub_semver.dart';
 import 'package:snip/snip.dart';
+import 'package:pool/pool.dart';
 
 void main(List<String> args) async {
   final runner = CommandRunner<int>(
@@ -53,6 +53,12 @@ class FormatCommand extends Command<int> {
         help:
             'Preserve existing trailing commas (force splits).\n'
             'By default, the formatter manages trailing commas automatically.',
+      )
+      ..addOption(
+        'concurrency',
+        abbr: 'j',
+        help: 'Number of concurrent isolates (default: 80% of CPU cores).',
+        valueHelp: 'count',
       );
   }
 
@@ -69,19 +75,20 @@ class FormatCommand extends Command<int> {
 
   @override
   Future<int> run() async {
-    final rest = argResults!.rest;
+    final argResults = this.argResults!;
+    final rest = argResults.rest;
     if (rest.isEmpty) {
       usageException('Please provide a path to format.');
     }
 
-    final check = argResults!.flag('check');
-    final apply = argResults!.flag('apply');
+    final check = argResults.flag('check');
+    final apply = argResults.flag('apply');
 
     if (check && apply) {
       usageException('Cannot use --check and --apply together.');
     }
 
-    final versionStr = argResults!.option('language-version');
+    final versionStr = argResults.option('language-version');
     Version? languageVersion;
     if (versionStr != null) {
       try {
@@ -91,44 +98,66 @@ class FormatCommand extends Command<int> {
       }
     }
 
-    final lineLength = int.tryParse(argResults!.option('line-length')!);
+    final lineLength = int.tryParse(argResults.option('line-length')!);
     if (lineLength == null || lineLength <= 0) {
       usageException('Invalid line length.');
     }
 
-    final trailingCommas = argResults!.flag('preserve-trailing-commas')
+    final trailingCommas = argResults.flag('preserve-trailing-commas')
         ? TrailingCommas.preserve
-        : null;
+        : TrailingCommas.automate;
 
-    final formatter = SnippetFormatter(
-      languageVersion: languageVersion,
-      pageWidth: lineLength,
-      trailingCommas: trailingCommas,
-    );
-    final mdProcessor = MarkdownProcessor(formatter);
-    final docProcessor = DocCommentProcessor(formatter);
+    final concurrencyStr = argResults.option('concurrency');
+    int maxConcurrency;
+    if (concurrencyStr != null) {
+      maxConcurrency = int.tryParse(concurrencyStr) ?? 0;
+      if (maxConcurrency <= 0) {
+        usageException('Invalid concurrency value.');
+      }
+    } else {
+      maxConcurrency = (Platform.numberOfProcessors * 0.8).ceil();
+    }
 
-    final files = _collectFiles(rest.first);
+    final pool = Pool(maxConcurrency);
+    final results = <Future<FileResult>>[];
+    await for (final file in _collectFiles(rest.first)) {
+      final path = file.path;
+      results.add(
+        pool.withResource(
+          () => Isolate.run(() {
+            final fmt = SnippetFormatter(
+              languageVersion: languageVersion,
+              pageWidth: lineLength,
+              trailingCommas: trailingCommas,
+            );
+
+            final content = File(path).readAsStringSync();
+            final result = switch (p.extension(path)) {
+              '.md' => MarkdownProcessor(fmt).process(content, path: path),
+              '.dart' => DocCommentProcessor(fmt).process(content, path: path),
+              _ => throw StateError(
+                'Cannot format snippets in $path. Invalid extension!',
+              ),
+            };
+            if (apply) {
+              File(result.path).writeAsStringSync(result.output);
+            }
+            return result;
+          }),
+        ),
+      );
+    }
+
+    // Report results sequentially to avoid mangled output.
     var formattedCount = 0;
     var unchangedCount = 0;
     var errorCount = 0;
 
-    for (final file in files) {
-      final content = file.readAsStringSync();
-      final ext = p.extension(file.path);
-
-      final result = switch (ext) {
-        '.md' => mdProcessor.process(content, path: file.path),
-        '.dart' => docProcessor.process(content, path: file.path),
-        _ => null,
-      };
-
-      if (result == null) continue;
-
+    for (final result in await results.wait) {
       for (final snippet in result.snippets) {
         if (snippet is SnippetError) {
           stderr.writeln(
-            '${file.path}:${snippet.startLine}: ${snippet.message}',
+            '${result.path}:${snippet.startLine}: ${snippet.message}',
           );
           errorCount++;
         }
@@ -137,12 +166,11 @@ class FormatCommand extends Command<int> {
       if (result.changed) {
         formattedCount++;
         if (apply) {
-          file.writeAsStringSync(result.output);
-          stdout.writeln('  formatted: ${file.path}');
+          stdout.writeln('  formatted: ${result.path}');
         } else if (check) {
-          stdout.writeln('  needs formatting: ${file.path}');
+          stdout.writeln('  needs formatting: ${result.path}');
         } else {
-          stdout.writeln('  would format: ${file.path}');
+          stdout.writeln('  would format: ${result.path}');
         }
       } else {
         unchangedCount++;
@@ -162,32 +190,25 @@ class FormatCommand extends Command<int> {
     return 0;
   }
 
-  List<File> _collectFiles(String target) {
+  Stream<File> _collectFiles(String target) async* {
     final type = FileSystemEntity.typeSync(target);
 
     if (type == FileSystemEntityType.file) {
-      return [File(target)];
+      yield File(target);
+    } else if (type == FileSystemEntityType.directory) {
+      yield* Directory(target) // find all markdown or dart files
+          .list(recursive: true)
+          .whereType<File>()
+          .where((f) {
+            final ext = p.extension(f.path);
+            return ext == '.md' || ext == '.dart';
+          });
+    } else {
+      stderr.writeln('Not a file or directory: $target');
     }
-
-    if (type == FileSystemEntityType.directory) {
-      final files = <File>[];
-      for (final pattern in ['**.md', '**.dart']) {
-        final glob = Glob(pattern);
-        files.addAll(
-          glob
-              .listSync(root: target)
-              .whereType<File>()
-              .where(
-                (f) => !p
-                    .split(f.path)
-                    .any((s) => s.startsWith('.') && s != '.' && s != '..'),
-              ),
-        );
-      }
-      return files;
-    }
-
-    stderr.writeln('Not a file or directory: $target');
-    return [];
   }
+}
+
+extension<T> on Stream<T> {
+  Stream<U> whereType<U>() => where((t) => t is U).cast<U>();
 }
