@@ -141,43 +141,53 @@ class FormatCommand extends Command<int> {
     }
 
     // Report results sequentially to avoid mangled output.
-    var formattedCount = 0;
-    var unchangedCount = 0;
-    var errorCount = 0;
+    var fileCount = 0;
+    var filesFormatted = 0;
+    var filesWithErrors = 0;
+    var snippetCount = 0;
+    var snippetsFormatted = 0;
+    var snippetsWithErrors = 0;
 
     for (final result in await results.wait) {
+      fileCount++;
       for (final snippet in result.snippets) {
+        snippetCount++;
         if (snippet is SnippetError) {
+          snippetsWithErrors++;
           stderr.writeln(
             '${result.path}:${snippet.startLine}: ${snippet.message}',
           );
-          errorCount++;
+        } else if (snippet is SnippetFormatted && snippet.changed) {
+          snippetsFormatted++;
         }
       }
 
       if (result.changed) {
-        formattedCount++;
+        filesFormatted++;
         if (apply) {
           stdout.writeln('  formatted: ${result.path}');
         } else {
           stdout.writeln('  needs formatting: ${result.path}');
         }
-      } else {
-        unchangedCount++;
       }
+      if (result.hasErrors) filesWithErrors++;
     }
 
     // Summary line.
-    final total = formattedCount + unchangedCount;
     final parts = <String>[
-      '$total file(s) scanned',
-      '$formattedCount need formatting',
-      if (errorCount > 0) '$errorCount error(s)',
+      '$fileCount file(s) scanned',
+      '$snippetCount snippet(s) found',
+      if (apply && snippetsFormatted > 0)
+        '$snippetsFormatted snippet(s) formatted in $filesFormatted file(s)',
+      if (!apply && snippetsFormatted > 0)
+        '$snippetsFormatted snippet(s) need formatting in $filesFormatted file(s)',
+      if (snippetsWithErrors > 0)
+        '$snippetsWithErrors snippet(s) with errors in $filesWithErrors file(s)',
     ];
     stdout.writeln(parts.join(', '));
 
-    if (errorCount > 0) return 1;
-    if (!apply && formattedCount > 0) return 1;
+    if (snippetsWithErrors > 0) return 1;
+    if (!apply && snippetsFormatted > 0) return 1;
     return 0;
   }
 
