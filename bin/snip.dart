@@ -28,11 +28,6 @@ void main(List<String> args) async {
 class FormatCommand extends Command<int> {
   FormatCommand() {
     argParser
-      ..addFlag(
-        'check',
-        help:
-            'Check if files need formatting (exit code 1 if so). Does not write.',
-      )
       ..addFlag('apply', help: 'Write formatted content back to files.')
       ..addOption(
         'language-version',
@@ -68,7 +63,8 @@ class FormatCommand extends Command<int> {
   @override
   String get description =>
       'Format Dart code snippets in Markdown files and doc comments.\n'
-      'By default, performs a dry run (reports files that would change).';
+      'Reports files that need formatting (exit code 1 if any).\n'
+      'Use --apply to write changes back to files.';
 
   @override
   String get invocation => '${runner!.executableName} $name <path>';
@@ -81,12 +77,7 @@ class FormatCommand extends Command<int> {
       usageException('Please provide a path to format.');
     }
 
-    final check = argResults.flag('check');
     final apply = argResults.flag('apply');
-
-    if (check && apply) {
-      usageException('Cannot use --check and --apply together.');
-    }
 
     final versionStr = argResults.option('language-version');
     Version? languageVersion;
@@ -168,10 +159,8 @@ class FormatCommand extends Command<int> {
         formattedCount++;
         if (apply) {
           stdout.writeln('  formatted: ${result.path}');
-        } else if (check) {
-          stdout.writeln('  needs formatting: ${result.path}');
         } else {
-          stdout.writeln('  would format: ${result.path}');
+          stdout.writeln('  needs formatting: ${result.path}');
         }
       } else {
         unchangedCount++;
@@ -187,7 +176,8 @@ class FormatCommand extends Command<int> {
     ];
     stdout.writeln(parts.join(', '));
 
-    if (check && formattedCount > 0) return 1;
+    if (errorCount > 0) return 1;
+    if (!apply && formattedCount > 0) return 1;
     return 0;
   }
 
