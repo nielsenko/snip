@@ -6,7 +6,7 @@ executables:
   snip:
 
 environment:
-  sdk: ^3.11.1
+  sdk: ^3.8.0
 
 dependencies:
   args: ^2.6.0
@@ -18,4 +18,4 @@ dependencies:
 
 dev_dependencies:
   lints: ^6.0.0
-  test: ^1.25.6
+  test: ^1.25.9
